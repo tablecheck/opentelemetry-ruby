@@ -60,6 +60,7 @@ module OpenTelemetry
             @span_processors.map do |processor|
               remaining_timeout = timeout - (Time.now - start_time)
               return Export::TIMEOUT unless remaining_timeout.positive?
+
               processor.force_flush(timeout: timeout)
             end.uniq.max
           end
@@ -78,6 +79,7 @@ module OpenTelemetry
             @span_processors.map do |processor|
               remaining_timeout = timeout - (Time.now - start_time)
               return Export::TIMEOUT unless remaining_timeout.positive?
+
               processor.shutdown(timeout: timeout)
             end.uniq.max
           end
