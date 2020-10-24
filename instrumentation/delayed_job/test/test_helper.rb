@@ -28,7 +28,7 @@ module TestHelper
 
   def setup_active_record
     ::ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: ':memory:')
-    ::ActiveRecord::Schema.define(version: 2018_05_25_114131) do
+    ::ActiveRecord::Schema.define do
       create_table 'delayed_jobs', force: :cascade do |t|
         t.integer 'priority', default: 0, null: false
         t.integer 'attempts', default: 0, null: false

@@ -12,45 +12,31 @@ module OpenTelemetry
       module Middlewares
         # Delayed Job plugin that instruments invoke_job and other hooks
         class TracerMiddleware < Delayed::Plugin
-
           class << self
-
-            def instrument_invoke(job, &block)
-              return block.call(job) unless enabled?
-
-              tracer.in_span('delayed_job.invoke', kind: :consumer) do |span|
-                span.set_attribute('delayed_job.id', job.id)
-                span.set_attribute('delayed_job.name', job_name(job))
-                span.set_attribute('delayed_job.queue', job.queue) if job.queue
-                span.set_attribute('delayed_job.priority', job.priority)
-                span.set_attribute('delayed_job.attempts', job.attempts)
-                span.set_attribute('delayed_job.locked_by', job.locked_by)
-
-                span.add_event('created_at', timestamp: job.created_at)
-                span.add_event('run_at', timestamp: job.run_at) if job.run_at
-                span.add_event('locked_at', timestamp: job.locked_at) if job.locked_at
-
-                begin
-                  yield job
-                rescue StandardError => error
-                  span.add_event('failed_at', timestamp: job.failed_at) if job.failed_at
-                  raise error
-                end
-              end
-            end
-
             def instrument_enqueue(job, &block)
               return block.call(job) unless enabled?
 
               tracer.in_span('delayed_job.enqueue', kind: :producer) do |span|
                 yield job
+                add_attributes(span, job)
+                add_events(span, job)
+              end
+            end
 
-                span.set_attribute('delayed_job.id', job.id)
-                span.set_attribute('delayed_job.name', job_name(job))
-                span.set_attribute('delayed_job.queue', job.queue) if job.queue
-                span.set_attribute('delayed_job.priority', job.priority)
-                span.add_event('created_at', timestamp: job.created_at)
-                span.add_event('run_at', timestamp: job.run_at) if job.run_at
+            def instrument_invoke(job, &block)
+              return block.call(job) unless enabled?
+
+              tracer.in_span('delayed_job.invoke', kind: :consumer) do |span|
+                add_attributes(span, job)
+                span.set_attribute('delayed_job.attempts', job.attempts) if job.attempts
+                span.set_attribute('delayed_job.locked_by', job.locked_by) if job.locked_by
+                add_events(span, job)
+                begin
+                  yield job
+                rescue StandardError => e
+                  span.add_event('failed_at', timestamp: job.failed_at) if job.failed_at
+                  raise e
+                end
               end
             end
 
@@ -61,6 +47,19 @@ module OpenTelemetry
             # end
 
             protected
+
+            def add_attributes(span, job, is_invoke = false)
+              span.set_attribute('delayed_job.id', job.id)
+              span.set_attribute('delayed_job.name', job_name(job))
+              span.set_attribute('delayed_job.queue', job.queue) if job.queue
+              span.set_attribute('delayed_job.priority', job.priority)
+            end
+
+            def add_events(span, job)
+              span.add_event('created_at', timestamp: job.created_at)
+              span.add_event('run_at', timestamp: job.run_at) if job.run_at
+              span.add_event('locked_at', timestamp: job.locked_at) if job.locked_at
+            end
 
             def enabled?
               DelayedJob::Instrumentation.instance.enabled?
@@ -79,8 +78,8 @@ module OpenTelemetry
           end
 
           callbacks do |lifecycle|
-            lifecycle.around(:invoke_job, &method(:instrument_invoke))
             lifecycle.around(:enqueue, &method(:instrument_enqueue))
+            lifecycle.around(:invoke_job, &method(:instrument_invoke))
             # lifecycle.around(:execute, &method(:flush))
           end
         end

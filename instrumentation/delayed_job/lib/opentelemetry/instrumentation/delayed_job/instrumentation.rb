@@ -9,7 +9,6 @@ module OpenTelemetry
     module DelayedJob
       # Instrumentation class that detects and installs the DelayedJob instrumentation
       class Instrumentation < OpenTelemetry::Instrumentation::Base
-
         MINIMUM_VERSION = Gem::Version.new('4.1')
 
         install do |_config|
@@ -24,7 +23,7 @@ module OpenTelemetry
         private
 
         def gem_version
-          Gem.loaded_specs['delayed_job'] && Gem.loaded_specs['delayed_job'].version
+          Gem.loaded_specs['delayed_job']&.version
         end
 
         def require_dependencies

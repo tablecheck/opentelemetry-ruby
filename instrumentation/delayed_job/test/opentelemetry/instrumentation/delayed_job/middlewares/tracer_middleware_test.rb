@@ -107,7 +107,10 @@ describe OpenTelemetry::Instrumentation::DelayedJob::Middlewares::TracerMiddlewa
   describe 'invoke_job callback' do
     let(:job_params) { {} }
     let(:job_enqueue) { Delayed::Job.enqueue(@basic_payload.new, job_params) }
-    let(:job_run) { job_enqueue; Delayed::Worker.new.work_off }
+    let(:job_run) do
+      job_enqueue
+      Delayed::Worker.new.work_off
+    end
 
     it 'creates an invoke span' do
       _(exporter.finished_spans).must_equal []
