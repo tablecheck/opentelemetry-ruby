@@ -107,7 +107,7 @@ describe OpenTelemetry::Instrumentation::DelayedJob::Middlewares::TracerMiddlewa
   describe 'invoke_job callback' do
     let(:job_params) { {} }
     let(:job_enqueue) { Delayed::Job.enqueue(@basic_payload.new, job_params) }
-    let(:job_run) { Delayed::Worker.new.run(job_enqueue) }
+    let(:job_run) { job_enqueue; Delayed::Worker.new.work_off }
 
     it 'creates an invoke span' do
       _(exporter.finished_spans).must_equal []
@@ -125,12 +125,15 @@ describe OpenTelemetry::Instrumentation::DelayedJob::Middlewares::TracerMiddlewa
       _(span.attributes['delayed_job.priority']).must_equal 0
       _(span.attributes['delayed_job.queue']).must_equal nil
       _(span.attributes['delayed_job.attempts']).must_equal 0
+      _(span.attributes['delayed_job.locked_by']).must_be_kind_of String
 
-      _(span.events.size).must_equal 2
+      _(span.events.size).must_equal 3
       _(span.events[0].name).must_equal 'created_at'
       _(span.events[0].timestamp).must_be_kind_of Time
       _(span.events[1].name).must_equal 'run_at'
       _(span.events[1].timestamp).must_be_kind_of Time
+      _(span.events[2].name).must_equal 'locked_at'
+      _(span.events[2].timestamp).must_be_kind_of Time
     end
 
     describe 'when queue name is set' do
