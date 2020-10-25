@@ -34,7 +34,9 @@ module OpenTelemetry
                 begin
                   yield job
                 rescue StandardError => e
-                  span.add_event('failed_at', timestamp: job.failed_at) if job.failed_at
+                  span.set_attribute('error', true)
+                  span.set_attribute('error.kind', e.class.name)
+                  span.set_attribute('message', e.message&.[](0...120))
                   raise e
                 end
               end
@@ -48,7 +50,8 @@ module OpenTelemetry
 
             protected
 
-            def add_attributes(span, job, is_invoke = false)
+            def add_attributes(span, job)
+              span.set_attribute('component', 'delayed_job')
               span.set_attribute('delayed_job.id', job.id)
               span.set_attribute('delayed_job.name', job_name(job))
               span.set_attribute('delayed_job.queue', job.queue) if job.queue

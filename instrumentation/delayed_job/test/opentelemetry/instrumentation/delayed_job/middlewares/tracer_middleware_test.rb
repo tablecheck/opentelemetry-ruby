@@ -24,6 +24,13 @@ describe OpenTelemetry::Instrumentation::DelayedJob::Middlewares::TracerMiddlewa
     end)
     @basic_payload = BasicPayload
 
+    stub_const('ErrorPayload', Class.new do
+      def perform
+        raise ArgumentError, 'This job failed'
+      end
+    end)
+    @error_payload = ErrorPayload
+
     stub_const('ActiveJobPayload', Class.new do
       def perform; end
 
@@ -63,6 +70,7 @@ describe OpenTelemetry::Instrumentation::DelayedJob::Middlewares::TracerMiddlewa
       _(span.name).must_equal 'delayed_job.enqueue'
 
       _(span).must_be_kind_of OpenTelemetry::SDK::Trace::SpanData
+      _(span.attributes['component']).must_equal 'delayed_job'
       _(span.attributes['delayed_job.name']).must_equal 'BasicPayload'
       _(span.attributes['delayed_job.id']).must_be_kind_of Integer
       _(span.attributes['delayed_job.queue']).must_equal nil
@@ -122,6 +130,7 @@ describe OpenTelemetry::Instrumentation::DelayedJob::Middlewares::TracerMiddlewa
       _(span.name).must_equal 'delayed_job.invoke'
 
       _(span).must_be_kind_of OpenTelemetry::SDK::Trace::SpanData
+      _(span.attributes['component']).must_equal 'delayed_job'
       _(span.attributes['delayed_job.name']).must_equal 'BasicPayload'
       _(span.attributes['delayed_job.id']).must_be_kind_of Integer
       _(span.attributes['delayed_job.queue']).must_equal nil
@@ -163,6 +172,21 @@ describe OpenTelemetry::Instrumentation::DelayedJob::Middlewares::TracerMiddlewa
       it 'has resource name equal to underlying ActiveJob class name' do
         job_run
         _(span.attributes['delayed_job.name']).must_equal 'UnderlyingJobClass'
+      end
+    end
+
+    describe 'when the job raises an error' do
+      let(:job_enqueue) { Delayed::Job.enqueue(@error_payload.new, job_params) }
+
+      it 'has resource name equal to underlying ActiveJob class name' do
+        job_run
+        _(span.attributes['delayed_job.name']).must_equal 'ErrorPayload'
+        _(span.attributes['error']).must_equal true
+        _(span.attributes['error.kind']).must_equal 'ArgumentError'
+        _(span.attributes['message']).must_equal 'This job failed'
+        _(span.events.size).must_equal 4
+        _(span.events[3].name).must_equal 'exception'
+        _(span.events[3].timestamp).must_be_kind_of Time
       end
     end
   end
